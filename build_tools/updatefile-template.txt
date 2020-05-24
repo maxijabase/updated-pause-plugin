@@ -1,0 +1,15 @@
+"Updater"
+{
+	"Information"
+	{
+		"Version"
+		{
+			"Latest"	"1.4.2"
+		}
+		
+		"Notes"	"Changes in 1.4.2:"
+		"Notes"	"- Updated the UPDATE_URL to its own repo"
+	}
+	
+	"Files"
+	{

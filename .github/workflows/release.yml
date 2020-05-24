@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        SM_VERSION: ["1.10"]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set environment variables
+        run: |
+          git fetch --unshallow
+          VERSION=$(git rev-list --count HEAD)
+          SHORT=$(git describe --always --long --dirty)
+          SOURCEMOD_PATH=$GITHUB_WORKSPACE/addons/sourcemod
+          echo ::set-env name=GIT_COMMIT::$VERSION
+          echo ::set-env name=PLUGIN_VERSION::${{ matrix.SM_VERSION }}.$VERSION.$SHORT
+          echo ::set-env name=WORKSPACE::$GITHUB_WORKSPACE
+          echo ::set-env name=SOURCEMOD_PATH::$SOURCEMOD_PATH
+          echo ::set-env name=SCRIPTS_PATH::$SOURCEMOD_PATH/scripting
+          echo ::set-env name=PLUGINS_PATH::$SOURCEMOD_PATH/plugins
+          
+      - name: Setup SourcePawn Compiler ${{ matrix.SM_VERSION }}
+        id: setup-sp
+        uses: rumblefrog/setup-sp@master
+        with:
+          version: ${{ matrix.SM_VERSION }}
+
+      - name: Compile pause.sp against SM ${{ steps.setup-sp.outputs.version }}
+        run: |
+          for plugin in "pause"
+          do
+            echo -e "\nCompiling $plugin.sp..."
+            spcomp -E -w234 -O2 -v2 -i $SCRIPTS_PATH/include $plugin.sp
+          done
+        working-directory: ${{ env.SCRIPTS_PATH }}/
+
+      - name: Move compiled plugins
+        run: |
+          rsync -av --include='*/' --include="*.smx" --exclude="*" --prune-empty-dirs --remove-source-files $SCRIPTS_PATH/ $PLUGINS_PATH/
+
+      - name: Rebuild updatefile.txt 
+        run: |
+          FILES=$(find cfg addons -type f \
+          | sed "s|^\.||" \
+          | sed 's/^/"/;s/$/"/' \
+          | sed '/regex/G' \
+          ) \
+          ;
+
+          find . -name "updatefile-template.txt" -type f -exec cp {} ./updatefile.txt \;
+
+          for FILE in $FILES
+          do
+              if [[ $FILE == *"scripting"* ]]; 
+              then
+                  echo $'\t\t"Source"\t\t' $FILE
+              else
+                  echo $'\t\t"Plugin"\t\t' $FILE
+              fi
+          done >> updatefile.txt
+
+          echo $'\t}' >> updatefile.txt
+          echo $'}' >> updatefile.txt
+        working-directory: ${{ env.WORKSPACE }}/
+
+      - name: Move folders (addons) to build
+        run: |
+          mkdir build
+          mv ./addons build/
+
+      - name: Add updatefile.txt to build package
+        run: |
+          mv $GITHUB_WORKSPACE/updatefile.txt .
+        working-directory: ./build
+
+      - name: Zip build folder
+        run: |
+          zip -r release.zip addons
+        working-directory: ./build
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/release.zip
+          asset_name: Pause.${{ env.PLUGIN_VERSION }}.zip
+          asset_content_type: application/zip
+
+      - name: Delete zip folder
+        run: |
+          rm release.zip
+        working-directory: ./build
+
+      - name: Update updater branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: updater
+          publish_dir: build/
