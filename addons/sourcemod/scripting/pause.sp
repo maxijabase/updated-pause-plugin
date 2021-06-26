@@ -28,6 +28,10 @@ Release notes:
 ---- 1.4.2 (23/08/2019) ----
 - Updated the UPDATE_URL to its own repo.
 
+---- 1.4.3 (06/26/2021) ----
+- removed f2stocks dependency
+- use newer vers of morecolors
+
 - Credits
 rodrigo286: for providng base code for storing/restoring uber on medic death
 			-https://forums.alliedmods.net/showthread.php?p=2022903
@@ -40,14 +44,13 @@ F2:	base code for pause feature
 
 #include <sourcemod>
 #include <morecolors>
-#include <f2stocks>
 #undef REQUIRE_PLUGIN
 #include <updater>
 
 #include <tf2_stocks>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION "1.4.2"
+#define PLUGIN_VERSION "1.4.3"
 #define UPDATE_URL	   "https://raw.githubusercontent.com/l-Aad-l/updated-pause-plugin/updater/updatefile.txt"
 
 #define PAUSE_UNPAUSE_TIME 2.0
@@ -131,7 +134,7 @@ public Action:Cmd_UnpausePause(client, const String:command[], args) {
 
 	g_iPauseState = Ignore__UnpausePause1;
 	FakeClientCommand(client, "pause");
-	CPrintToChatAllEx2(client, "{lightgreen}[Pause] {default}Game was unpaused by {teamcolor}%N", client);
+	MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game was unpaused by {teamcolor}%N", client);
 
 	CreateTimer(0.05, Timer_Repause, client, TIMER_FLAG_NO_MAPCHANGE);
 	return Plugin_Handled;
@@ -139,7 +142,7 @@ public Action:Cmd_UnpausePause(client, const String:command[], args) {
 
 public Action:Timer_Repause(Handle:timer, any:client) {
 	FakeClientCommandEx(client, "pause");
-	CPrintToChatAllEx2(client, "{lightgreen}[Pause] {default}Game was paused by {teamcolor}%N", client);
+	MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game was paused by {teamcolor}%N", client);
 }
 
 public Action:Cmd_Pause(client, const String:command[], args) {
@@ -178,15 +181,15 @@ public Action:Cmd_Pause(client, const String:command[], args) {
 
 		new PauseState:oldState = g_iPauseState;
 		g_iPauseState = Paused;
-		CPrintToChatAllEx2(client, "{lightgreen}[Pause] {default}Game was paused by {teamcolor}%N", client);
-		CPrintToChatAllEx2(client, "{lightgreen}[Pause] Updated version: Saves Ubercharge during pauses!");
+		MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game was paused by {teamcolor}%N", client);
+		MC_PrintToChatAllEx(client, "{lightgreen}[Pause] Updated version: Saves Ubercharge during pauses!");
 
 		//saves uber charge of every medic on server to the array
 		for (new i = 1; i <= MaxClients; i++) {
 			if (IsClientInGame(i)) {
 				if(TF2_GetPlayerClass(i) == TF2_GetClass("medic")) { // filter by medics on server
 					new UberWeapons = GetPlayerWeaponSlot(i, 1); // get uber charge %
-					CPrintToChatAllEx2(i, "{default}Saving ubercharge level for {teamcolor}%N", i);
+					MC_PrintToChatAllEx(i, "{default}Saving ubercharge level for {teamcolor}%N", i);
 					ChargeLevel[i] = GetEntPropFloat(UberWeapons, Prop_Send, "m_flChargeLevel"); // store charge as a float
 				}
 			}
@@ -202,12 +205,12 @@ public Action:Cmd_Pause(client, const String:command[], args) {
 		new Float:timeSinceLastPause = GetTickedTime() - g_fLastPause;
 		if (timeSinceLastPause < PAUSE_UNPAUSE_TIME) {
 			new Float:waitTime = PAUSE_UNPAUSE_TIME - timeSinceLastPause;
-			CPrintToChat2(client, "{lightgreen}[Pause] {default}To prevent accidental unpauses, you have to wait %.1f second%s before unpausing.", waitTime, (waitTime >= 0.95 && waitTime < 1.05) ? "" : "s");
+			MC_PrintToChat(client, "{lightgreen}[Pause] {default}To prevent accidental unpauses, you have to wait %.1f second%s before unpausing.", waitTime, (waitTime >= 0.95 && waitTime < 1.05) ? "" : "s");
 			return Plugin_Handled;
 		}
 
 		g_iPauseState = AboutToUnpause;
-		CPrintToChatAllEx2(client, "{lightgreen}[Pause] {default}Game is being unpaused in %i seconds by {teamcolor}%N{default}...", UNPAUSE_WAIT_TIME, client);
+		MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game is being unpaused in %i seconds by {teamcolor}%N{default}...", UNPAUSE_WAIT_TIME, client);
 
 		g_iCountdown = UNPAUSE_WAIT_TIME;
 		g_hCountdownTimer = CreateTimer(1.0, Timer_Countdown, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
@@ -235,7 +238,7 @@ public Action:Timer_Countdown(Handle:timer) {
 					new UberWeapons = GetPlayerWeaponSlot(i, 1); // get medic secondary
 					if(UberWeapons != -1)
 					{
-						CPrintToChatAllEx2(i, "{default}Restoring ubercharge level for {teamcolor}%N", i);
+						MC_PrintToChatAllEx(i, "{default}Restoring ubercharge level for {teamcolor}%N", i);
 						SetEntPropFloat(UberWeapons, Prop_Send, "m_flChargeLevel", ChargeLevel[i]); // restore charge level from before pause
 						ChargeLevel[i] = 0.0;
 					}
@@ -246,7 +249,7 @@ public Action:Timer_Countdown(Handle:timer) {
 		// cannot be merged with for loop above or it will break out of loop while it tries restoring all ubercharges
 		for (new client = 1; client <= MaxClients; client++) {
 			if (IsClientValid(client)) {
-				CPrintToChatAll2("{lightgreen}[Pause] {default}Game is unpaused!");
+				MC_PrintToChatAll("{lightgreen}[Pause] {default}Game is unpaused!");
 				FakeClientCommandEx(client, "pause");
 				break;
 			}
@@ -256,7 +259,7 @@ public Action:Timer_Countdown(Handle:timer) {
 	} else {
 		PrintCenterTextAll("Unpausing in %is...", g_iCountdown);
 		if (g_iCountdown < UNPAUSE_WAIT_TIME)
-			CPrintToChatAll2("{lightgreen}[Pause] {default}Game is being unpaused in %i second%s...", g_iCountdown, g_iCountdown == 1 ? "" : "s");
+			MC_PrintToChatAll("{lightgreen}[Pause] {default}Game is being unpaused in %i second%s...", g_iCountdown, g_iCountdown == 1 ? "" : "s");
 		g_iCountdown--;
 		return Plugin_Continue;
 	}
@@ -265,7 +268,7 @@ public Action:Timer_Countdown(Handle:timer) {
 public Action:Timer_PauseTime(Handle:timer) {
 	g_iPauseTimeMinutes++;
 	if (g_iPauseState != AboutToUnpause)
-		CPrintToChatAll2("{lightgreen}[Pause] {default}Game has been paused for %i minute%s", g_iPauseTimeMinutes, g_iPauseTimeMinutes == 1 ? "" : "s");
+		MC_PrintToChatAll("{lightgreen}[Pause] {default}Game has been paused for %i minute%s", g_iPauseTimeMinutes, g_iPauseTimeMinutes == 1 ? "" : "s");
 	return Plugin_Continue;
 }
 
@@ -291,11 +294,17 @@ public Action:Cmd_Say(client, const String:command[], args) {
 			else if ((GetClientTeam(client) == _:TFTeam_Red || GetClientTeam(client) == _:TFTeam_Blue) && !IsPlayerAlive(client))
 				dead = "*DEAD* ";
 
-			CPrintToChatAllEx2(client, "%s{teamcolor}%N{default} :  %s", dead, client, buffer);
+			MC_PrintToChatAllEx(client, "%s{teamcolor}%N{default} :  %s", dead, client, buffer);
 		}
 
 		return Plugin_Handled;
 	}
 
 	return Plugin_Continue;
+}
+
+// valid client check
+bool IsClientValid(int client)
+{
+	return client > 0 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && !IsClientSourceTV(client);
 }
