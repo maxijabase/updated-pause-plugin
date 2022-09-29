@@ -13,10 +13,9 @@
 	
 	"Files"
 	{
-		"Plugin"		 "addons/sourcemod/plugins/pause.smx"
-		"Source"		 "addons/sourcemod/scripting/pause.sp"
-		"Source"		 "addons/sourcemod/scripting/include/f2stocks.inc"
-		"Source"		 "addons/sourcemod/scripting/include/morecolors.inc"
 		"Source"		 "addons/sourcemod/scripting/include/updater.inc"
+		"Source"		 "addons/sourcemod/scripting/include/morecolors.inc"
+		"Source"		 "addons/sourcemod/scripting/pause.sp"
+		"Plugin"		 "addons/sourcemod/plugins/pause.smx"
 	}
 }
