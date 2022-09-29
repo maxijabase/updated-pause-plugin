@@ -33,8 +33,8 @@ Release notes:
 - use newer vers of morecolors
 
 ---- 1.5.0 (09/29/2022) ----
-- 
-- 
+- fixed ubers not getting drained properly on unpause
+- updated syntax
 
 - Credits
 rodrigo286: for providng base code for storing/restoring uber on medic death
@@ -42,6 +42,8 @@ rodrigo286: for providng base code for storing/restoring uber on medic death
 
 F2:	base code for pause feature
 			-http://etf2l.org/forum/customise/topic-27485/page-1/
+
+ampere: syntax update, unpause uber drain bug
 */
 
 #pragma semicolon 1
@@ -56,7 +58,7 @@ F2:	base code for pause feature
 #include <sdkhooks>
 
 #define PLUGIN_VERSION "1.5.0"
-#define UPDATE_URL	   "https://raw.githubusercontent.com/l-Aad-l/updated-pause-plugin/updater/updatefile.txt"
+#define UPDATE_URL	   "https://raw.githubusercontent.com/maxijabase/updated-pause-plugin/updater/updatefile.txt"
 
 #define PAUSE_UNPAUSE_TIME 2.0
 #define UNPAUSE_WAIT_TIME 5
@@ -130,14 +132,15 @@ public void OnMapStart() {
 
 public Action Cmd_UnpausePause(int client, const char[] command, int args) {
 	// Let the game handle the "off" situations
-	if (!GetConVarBool(g_cvarPausable))
+	if (!g_cvarPausable.BoolValue || client == 0) {
 		return Plugin_Continue;
-	if (client == 0)
-		return Plugin_Continue;
+	}
 	
-	if (g_iPauseState != Paused)
+	if (g_iPauseState != Paused) {
 		return Plugin_Handled;
+	}
 	
+	// Announce and perform unpause
 	g_iPauseState = Ignore__UnpausePause1;
 	FakeClientCommand(client, "pause");
 	MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game was unpaused by {teamcolor}%N", client);
@@ -153,10 +156,9 @@ public Action Timer_Repause(Handle timer, any client) {
 
 public Action Cmd_Pause(int client, const char[] command, int args) {
 	// Let the game handle the "off" situations
-	if (!GetConVarBool(g_cvarPausable))
+	if (!g_cvarPausable.BoolValue || client == 0) {
 		return Plugin_Continue;
-	if (client == 0)
-		return Plugin_Continue;
+	}
 	
 	if (StrEqual(command, "unpause", false)) {
 		if (!(g_iPauseState == Unpaused || g_iPauseState == AboutToUnpause))
@@ -192,13 +194,17 @@ public Action Cmd_Pause(int client, const char[] command, int args) {
 		
 		// Saves uber charge of every medic on server to the array
 		for (int i = 1; i <= MaxClients; i++) {
-			if (IsClientInGame(i)) {
-				if (TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {  // filter by medics on server
-					int medigun = GetPlayerWeaponSlot(i, 1); // get uber charge %
-					MC_PrintToChatAllEx(i, "{default}Saving ubercharge level for {teamcolor}%N", i);
-					g_fChargeLevel[i] = GetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel"); // store charge as a float
-					//g_iChargeReleased[i] = GetEntProp(medigun, Prop_Send, "m_bChargeRelease");
-				}
+			// Check for medics
+			if (IsClientValid(i) && TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {
+				// Get medigun
+				int medigun = GetPlayerWeaponSlot(i, 1);
+				
+				// Store charge and ubered state
+				g_fChargeLevel[i] = GetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel"); // store charge as a float
+				g_iChargeReleased[i] = GetEntProp(medigun, Prop_Send, "m_bChargeRelease");
+				
+				// Announce
+				MC_PrintToChatAllEx(i, "{default}Saving ubercharge level for {teamcolor}%N", i);
 			}
 		}
 		
@@ -239,17 +245,21 @@ public Action Timer_Countdown(Handle timer) {
 		
 		g_iPauseState = Ignore__Unpaused;
 		for (int i = 1; i <= MaxClients; i++) {
-			if (IsClientValid(i)) {
-				//restore ubers -changed here
-				if (TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {  // filter by medics on server
-					int medigun = GetPlayerWeaponSlot(i, 1); // get medic secondary
-					if (medigun != -1)
-					{
-						MC_PrintToChatAllEx(i, "{default}Restoring ubercharge level for {teamcolor}%N", i);
-						//SetEntProp(medigun, Prop_Send, "m_bChargeRelease", g_iChargeReleased[i]);
-						SetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel", g_fChargeLevel[i]); // restore charge level from before pause
-						g_fChargeLevel[i] = 0.0;
-					}
+			// Check for medics
+			if (IsClientValid(i) && TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {
+				// Get medigun
+				int medigun = GetPlayerWeaponSlot(i, 1);
+				if (medigun != -1)
+				{
+					// Restore uber percentage and state (deployed or not)
+					SetEntProp(medigun, Prop_Send, "m_bChargeRelease", g_iChargeReleased[i]);
+					SetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel", g_fChargeLevel[i]);
+					
+					// Announce
+					MC_PrintToChatAllEx(i, "{default}Restoring ubercharge level and state for {teamcolor}%N", i);
+					
+					// Reset buffer
+					g_fChargeLevel[i] = 0.0;
 				}
 			}
 		}
@@ -311,7 +321,6 @@ public Action Cmd_Say(int client, const char[] command, int args) {
 	return Plugin_Continue;
 }
 
-// valid client check
 bool IsClientValid(int client)
 {
 	return client > 0 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && !IsClientSourceTV(client);
