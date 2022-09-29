@@ -79,7 +79,8 @@ Handle g_hCountdownTimer;
 Handle g_hPauseTimeTimer;
 int g_iPauseTimeMinutes;
 
-float ChargeLevel[MAXPLAYERS + 1];
+float g_fChargeLevel[MAXPLAYERS + 1];
+int g_iChargeReleased[MAXPLAYERS + 1];
 
 public Plugin myinfo = {
 	name = "Improved Pause Command", 
@@ -189,13 +190,14 @@ public Action Cmd_Pause(int client, const char[] command, int args) {
 		MC_PrintToChatAllEx(client, "{lightgreen}[Pause] {default}Game was paused by {teamcolor}%N", client);
 		MC_PrintToChatAllEx(client, "{lightgreen}[Pause] Updated version: Saves Ubercharge during pauses!");
 		
-		//saves uber charge of every medic on server to the array
+		// Saves uber charge of every medic on server to the array
 		for (int i = 1; i <= MaxClients; i++) {
 			if (IsClientInGame(i)) {
 				if (TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {  // filter by medics on server
-					int UberWeapons = GetPlayerWeaponSlot(i, 1); // get uber charge %
+					int medigun = GetPlayerWeaponSlot(i, 1); // get uber charge %
 					MC_PrintToChatAllEx(i, "{default}Saving ubercharge level for {teamcolor}%N", i);
-					ChargeLevel[i] = GetEntPropFloat(UberWeapons, Prop_Send, "m_flChargeLevel"); // store charge as a float
+					g_fChargeLevel[i] = GetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel"); // store charge as a float
+					//g_iChargeReleased[i] = GetEntProp(medigun, Prop_Send, "m_bChargeRelease");
 				}
 			}
 		}
@@ -240,12 +242,13 @@ public Action Timer_Countdown(Handle timer) {
 			if (IsClientValid(i)) {
 				//restore ubers -changed here
 				if (TF2_GetPlayerClass(i) == TF2_GetClass("medic")) {  // filter by medics on server
-					int UberWeapons = GetPlayerWeaponSlot(i, 1); // get medic secondary
-					if (UberWeapons != -1)
+					int medigun = GetPlayerWeaponSlot(i, 1); // get medic secondary
+					if (medigun != -1)
 					{
 						MC_PrintToChatAllEx(i, "{default}Restoring ubercharge level for {teamcolor}%N", i);
-						SetEntPropFloat(UberWeapons, Prop_Send, "m_flChargeLevel", ChargeLevel[i]); // restore charge level from before pause
-						ChargeLevel[i] = 0.0;
+						//SetEntProp(medigun, Prop_Send, "m_bChargeRelease", g_iChargeReleased[i]);
+						SetEntPropFloat(medigun, Prop_Send, "m_flChargeLevel", g_fChargeLevel[i]); // restore charge level from before pause
+						g_fChargeLevel[i] = 0.0;
 					}
 				}
 			}
